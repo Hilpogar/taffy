@@ -1,6 +1,7 @@
 //! Computes the [flexbox](https://css-tricks.com/snippets/css/a-guide-to-flexbox/) layout algorithm on [`TaffyTree`](crate::TaffyTree) according to the [spec](https://www.w3.org/TR/css-flexbox-1/)
 use crate::compute::common::alignment::compute_alignment_offset;
 use crate::geometry::{Line, Point, Rect, Size};
+use crate::prelude::{TaffyAuto, TaffyZero};
 use crate::style::{
     AlignContent, AlignItems, AlignSelf, AvailableSpace, FlexWrap, JustifyContent, LengthPercentageAuto, Overflow,
     Position,
@@ -13,7 +14,7 @@ use crate::util::debug::debug_log;
 use crate::util::sys::{f32_max, new_vec_with_capacity, Vec};
 use crate::util::MaybeMath;
 use crate::util::{MaybeResolve, ResolveOrZero};
-use crate::{BoxGenerationMode, BoxSizing};
+use crate::{BoxGenerationMode, BoxSizing, Dimension};
 
 use super::common::alignment::apply_alignment_fallback;
 #[cfg(feature = "content_size")]
@@ -171,6 +172,7 @@ pub fn compute_flexbox_layout(
 
     // Pull these out earlier to avoid borrowing issues
     let aspect_ratio = style.aspect_ratio();
+    println!("In Flex: {:?}", style.aspect_ratio());
     let padding = style.padding().resolve_or_zero(parent_size.width, |val, basis| tree.calc(val, basis));
     let border = style.border().resolve_or_zero(parent_size.width, |val, basis| tree.calc(val, basis));
     let padding_border_sum = padding.sum_axes() + border.sum_axes();
@@ -1623,7 +1625,27 @@ fn determine_used_cross_size(
                         max_size_ignoring_aspect_ratio.cross(constants.dir),
                     )
                 } else {
-                    child.hypothetical_inner_size.cross(constants.dir)
+                    match child_style.aspect_ratio() {
+                        Some(aspect_ratio) => {
+                            match child_style.size().cross(constants.dir) {
+                                Dimension::AUTO | Dimension::ZERO => {
+                                    let main_size = child.target_size.main(constants.dir);
+                                    match constants.dir {
+                                        FlexDirection::Column | FlexDirection::ColumnReverse => {
+                                            main_size * aspect_ratio
+                                        }
+                                        FlexDirection::Row | FlexDirection::RowReverse => main_size / aspect_ratio,
+                                    }
+                                    .maybe_clamp(
+                                        child.min_size.cross(constants.dir),
+                                        child.max_size.cross(constants.dir),
+                                    )
+                                }
+                                _ => child.hypothetical_inner_size.cross(constants.dir), // TODO: clamp
+                            }
+                        }
+                        None => child.hypothetical_inner_size.cross(constants.dir),
+                    }
                 },
             );
 
