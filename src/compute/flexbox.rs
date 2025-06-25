@@ -1377,11 +1377,30 @@ fn determine_hypothetical_cross_size(
 
         let child_known_main = constants.container_size.main(constants.dir).into();
 
-        let child_cross = child
-            .size
-            .cross(constants.dir)
-            .maybe_clamp(child.min_size.cross(constants.dir), child.max_size.cross(constants.dir))
-            .maybe_max(padding_border_sum);
+        // The hypothetical cross size must take into account the cross-size computed from the aspect-ratio of the target_size
+        // if applicable. This is importante because the cross-size can be influenced by this value when the size on
+        // the main axis is modified by a flex_grow or a flex_shrink.
+        let child_cross = {
+            let child_style = tree.get_flexbox_child_style(child.node);
+            if let (Some(aspect_ratio), true) =
+                (child_style.aspect_ratio(), child_style.size().cross(constants.dir).is_auto())
+            {
+                let main_size = child.target_size.main(constants.dir);
+                Some(
+                    match constants.dir {
+                        FlexDirection::Column | FlexDirection::ColumnReverse => main_size * aspect_ratio,
+                        FlexDirection::Row | FlexDirection::RowReverse => main_size / aspect_ratio,
+                    }
+                    .maybe_clamp(child.min_size.cross(constants.dir), child.max_size.cross(constants.dir)),
+                )
+            } else {
+                child
+                    .size
+                    .cross(constants.dir)
+                    .maybe_clamp(child.min_size.cross(constants.dir), child.max_size.cross(constants.dir))
+                    .maybe_max(padding_border_sum)
+            }
+        };
 
         let child_available_cross = available_space
             .cross(constants.dir)
@@ -1617,23 +1636,7 @@ fn determine_used_cross_size(
                         child.max_size_ignoring_aspect_ratio.cross(constants.dir),
                     )
                 } else {
-                    // Even if this isn't specified by the spec, the aspect-ratio must also be applied here to deal with the case where the size of the main axis has been modified
-                    // by a flex_grow or flex_shrink.
-                    match child_style.aspect_ratio() {
-                        Some(aspect_ratio) => {
-                            if child_style.size().cross(constants.dir).is_auto() {
-                                let main_size = child.target_size.main(constants.dir);
-                                match constants.dir {
-                                    FlexDirection::Column | FlexDirection::ColumnReverse => main_size * aspect_ratio,
-                                    FlexDirection::Row | FlexDirection::RowReverse => main_size / aspect_ratio,
-                                }
-                                .maybe_clamp(child.min_size.cross(constants.dir), child.max_size.cross(constants.dir))
-                            } else {
-                                child.hypothetical_inner_size.cross(constants.dir)
-                            }
-                        }
-                        None => child.hypothetical_inner_size.cross(constants.dir),
-                    }
+                    child.hypothetical_inner_size.cross(constants.dir)
                 },
             );
 
