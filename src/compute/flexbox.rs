@@ -34,6 +34,8 @@ struct FlexItem {
     min_size: Size<Option<f32>>,
     /// The maximum allowable size of this item
     max_size: Size<Option<f32>>,
+    /// In some cases, the algorithm does not take into account the maximum size implied by the aspect ratio
+    max_size_ignoring_aspect_ratio: Size<Option<f32>>,
     /// The cross-alignment of this item
     align_self: AlignSelf,
 
@@ -534,6 +536,10 @@ fn generate_anonymous_flex_items(
                     .max_size()
                     .maybe_resolve(constants.node_inner_size, |val, basis| tree.calc(val, basis))
                     .maybe_apply_aspect_ratio(aspect_ratio)
+                    .maybe_add(box_sizing_adjustment),
+                max_size_ignoring_aspect_ratio: child_style
+                    .max_size()
+                    .maybe_resolve(constants.node_inner_size, |val, basis| tree.calc(val, basis))
                     .maybe_add(box_sizing_adjustment),
 
                 inset: child_style
@@ -1319,7 +1325,8 @@ fn resolve_flexible_lengths(line: &mut FlexLine, constants: &AlgoConstants) {
 
         let total_violation = unfrozen.iter_mut().fold(0.0, |acc, child| -> f32 {
             let resolved_min_main: Option<f32> = child.resolved_minimum_main_size.into();
-            let max_main = child.max_size.main(constants.dir);
+            // The max size on the main axis is not limited by the max size due to the aspect ratio.
+            let max_main = child.max_size_ignoring_aspect_ratio.main(constants.dir);
             let clamped = child.target_size.main(constants.dir).maybe_clamp(resolved_min_main, max_main).max(0.0);
             child.violation = clamped - child.target_size.main(constants.dir);
             child.target_size.set_main(constants.dir, clamped);
@@ -1605,43 +1612,24 @@ fn determine_used_cross_size(
                     // For some reason this particular usage of max_width is an exception to the rule that max_width's transfer
                     // using the aspect_ratio (if set). Both Chrome and Firefox agree on this. And reading the spec, it seems like
                     // a reasonable interpretation. Although it seems to me that the spec *should* apply aspect_ratio here.
-                    let padding = child_style
-                        .padding()
-                        .resolve_or_zero(constants.node_inner_size, |val, basis| tree.calc(val, basis));
-                    let border = child_style
-                        .border()
-                        .resolve_or_zero(constants.node_inner_size, |val, basis| tree.calc(val, basis));
-                    let pb_sum = (padding + border).sum_axes();
-                    let box_sizing_adjustment =
-                        if child_style.box_sizing() == BoxSizing::ContentBox { pb_sum } else { Size::ZERO };
-
-                    let max_size_ignoring_aspect_ratio = child_style
-                        .max_size()
-                        .maybe_resolve(constants.node_inner_size, |val, basis| tree.calc(val, basis))
-                        .maybe_add(box_sizing_adjustment);
-
                     (line_cross_size - child.margin.cross_axis_sum(constants.dir)).maybe_clamp(
                         child.min_size.cross(constants.dir),
-                        max_size_ignoring_aspect_ratio.cross(constants.dir),
+                        child.max_size_ignoring_aspect_ratio.cross(constants.dir),
                     )
                 } else {
+                    // Even if this isn't specified by the spec, the aspect-ratio must also be applied here to deal with the case where the size of the main axis has been modified
+                    // by a flex_grow or flex_shrink.
                     match child_style.aspect_ratio() {
                         Some(aspect_ratio) => {
-                            match child_style.size().cross(constants.dir) {
-                                Dimension::AUTO | Dimension::ZERO => {
-                                    let main_size = child.target_size.main(constants.dir);
-                                    match constants.dir {
-                                        FlexDirection::Column | FlexDirection::ColumnReverse => {
-                                            main_size * aspect_ratio
-                                        }
-                                        FlexDirection::Row | FlexDirection::RowReverse => main_size / aspect_ratio,
-                                    }
-                                    .maybe_clamp(
-                                        child.min_size.cross(constants.dir),
-                                        child.max_size.cross(constants.dir),
-                                    )
+                            if child_style.size().cross(constants.dir).is_auto() {
+                                let main_size = child.target_size.main(constants.dir);
+                                match constants.dir {
+                                    FlexDirection::Column | FlexDirection::ColumnReverse => main_size * aspect_ratio,
+                                    FlexDirection::Row | FlexDirection::RowReverse => main_size / aspect_ratio,
                                 }
-                                _ => child.hypothetical_inner_size.cross(constants.dir), // TODO: clamp
+                                .maybe_clamp(child.min_size.cross(constants.dir), child.max_size.cross(constants.dir))
+                            } else {
+                                child.hypothetical_inner_size.cross(constants.dir)
                             }
                         }
                         None => child.hypothetical_inner_size.cross(constants.dir),
