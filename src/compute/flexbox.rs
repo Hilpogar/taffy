@@ -1382,21 +1382,28 @@ fn determine_hypothetical_cross_size(
 
         let child_known_main = constants.container_size.main(constants.dir).into();
 
-        // The hypothetical cross size must take into account the cross-size computed from the aspect-ratio of the target_size
-        // if applicable. This is importante because the cross-size can be influenced by this value when the size on
-        // the main axis is modified by a flex_grow or a flex_shrink.
+        // The hypothetical cross size must take into account the adaptation of the cross_size following a change
+        // in the main axis due to flex_grow or flex_shrink when :
+        // - There is an aspect-ratio
+        // - The cross size is auto
+        // - And the flex direction is row
+        // Strangely, this behavior is only valid when the flex direction is in row.
+        // For columns, hypothetical cross size does not take into account any changes in size due to grow or shrink.
+        // However, when calculating the item's actual cross_size (determine_used_cross_size), the item's cross_size must be adapted.
+        //
+        // This difference in behavior can be seen by comparing :
+        // - aspect_ratio_flex_row_item_shrink_fill_min_height.html
+        // - aspect_ratio_flex_row_item_shrink_fill_min_width.html
         let child_cross = {
             let child_style = tree.get_flexbox_child_style(child.node);
-            if let (Some(aspect_ratio), true) =
-                (child_style.aspect_ratio(), child_style.size().cross(constants.dir).is_auto())
+            if let (Some(aspect_ratio), true, true) =
+                (child_style.aspect_ratio(), child_style.size().cross(constants.dir).is_auto(), constants.dir.is_row())
             {
-                let main_size = child.target_size.main(constants.dir);
                 Some(
-                    match constants.dir {
-                        FlexDirection::Column | FlexDirection::ColumnReverse => main_size * aspect_ratio,
-                        FlexDirection::Row | FlexDirection::RowReverse => main_size / aspect_ratio,
-                    }
-                    .maybe_clamp(child.min_size.cross(constants.dir), child.max_size.cross(constants.dir)),
+                    child
+                        .target_size
+                        .compute_cross_aspect_ratio(constants.dir, aspect_ratio)
+                        .maybe_clamp(child.min_size.cross(constants.dir), child.max_size.cross(constants.dir)),
                 )
             } else {
                 child
@@ -1641,7 +1648,21 @@ fn determine_used_cross_size(
                         child.max_size_ignoring_aspect_ratio.cross(constants.dir),
                     )
                 } else {
-                    child.hypothetical_inner_size.cross(constants.dir)
+                    // Because the hypothetical_cross_size isn't modified by the change of the main size due to flex_grow or flex_shrink
+                    // when the flex direction is column, we must adapt the used_cross_size now.
+                    let child_style = tree.get_flexbox_child_style(child.node);
+                    if let (Some(aspect_ratio), true, true) = (
+                        child_style.aspect_ratio(),
+                        child_style.size().cross(constants.dir).is_auto(),
+                        constants.dir.is_column(),
+                    ) {
+                        child
+                            .target_size
+                            .compute_cross_aspect_ratio(constants.dir, aspect_ratio)
+                            .maybe_clamp(child.min_size.cross(constants.dir), child.max_size.cross(constants.dir))
+                    } else {
+                        child.hypothetical_inner_size.cross(constants.dir)
+                    }
                 },
             );
 
