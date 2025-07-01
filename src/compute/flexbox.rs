@@ -519,6 +519,10 @@ fn generate_anonymous_flex_items(
             let pb_sum = (padding + border).sum_axes();
             let box_sizing_adjustment =
                 if child_style.box_sizing() == BoxSizing::ContentBox { pb_sum } else { Size::ZERO };
+            let size_ignoring_aspect_ratio = child_style
+                .size()
+                .maybe_resolve(constants.node_inner_size, |val, basis| tree.calc(val, basis))
+                .maybe_add(box_sizing_adjustment);
             FlexItem {
                 node: child,
                 order: index as u32,
@@ -530,7 +534,8 @@ fn generate_anonymous_flex_items(
                 min_size: child_style
                     .min_size()
                     .maybe_resolve(constants.node_inner_size, |val, basis| tree.calc(val, basis))
-                    .maybe_apply_aspect_ratio(aspect_ratio)
+                    // Aspect-ratio cannot grow min_size above size if a size is defined
+                    .maybe_apply_aspect_ratio_with_max(aspect_ratio, size_ignoring_aspect_ratio)
                     .maybe_add(box_sizing_adjustment),
                 max_size: child_style
                     .max_size()
@@ -799,7 +804,7 @@ fn determine_flex_base_size(
         let style_min_main_size =
             child.min_size.or(child.overflow.map(Overflow::maybe_into_automatic_min_size).into()).main(dir);
 
-        child.resolved_minimum_main_size = style_min_main_size.unwrap_or({
+        child.resolved_minimum_main_size = style_min_main_size.unwrap_or_else(|| {
             let min_content_main_size = {
                 let child_available_space = Size::MIN_CONTENT.with_cross(dir, cross_axis_available_space);
 

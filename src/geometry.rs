@@ -1,8 +1,8 @@
 //! Geometric primitives useful for layout
 
 use crate::util::sys::f32_max;
-use crate::CompactLength;
 use crate::{style::Dimension, util::sys::f32_min};
+use crate::{CompactLength, MaybeMath};
 use core::ops::{Add, Sub};
 
 #[cfg(feature = "flexbox")]
@@ -582,6 +582,28 @@ impl Size<Option<f32>> {
             Some(ratio) => match (self.width, self.height) {
                 (Some(width), None) => Size { width: Some(width), height: Some(width / ratio) },
                 (None, Some(height)) => Size { width: Some(height * ratio), height: Some(height) },
+                _ => self,
+            },
+            None => self,
+        }
+    }
+
+    /// Applies aspect_ratio (if one is supplied) to the Size but limit the expension to max:
+    ///   - If width is `Some` but height is `None`, then height is computed from width and aspect_ratio
+    ///   - If height is `Some` but width is `None`, then width is computed from height and aspect_ratio
+    ///
+    /// If aspect_ratio is `None` then this function simply returns self.
+    pub fn maybe_apply_aspect_ratio_with_max(
+        self,
+        aspect_ratio: Option<f32>,
+        max: Size<Option<f32>>,
+    ) -> Size<Option<f32>> {
+        match aspect_ratio {
+            Some(ratio) => match (self.width, self.height) {
+                (Some(width), None) => Size { width: Some(width), height: Some((width / ratio).maybe_min(max.height)) },
+                (None, Some(height)) => {
+                    Size { width: Some((height * ratio).maybe_min(max.width)), height: Some(height) }
+                }
                 _ => self,
             },
             None => self,
