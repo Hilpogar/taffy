@@ -1403,7 +1403,8 @@ fn determine_hypothetical_cross_size(
                     child
                         .target_size
                         .compute_cross_aspect_ratio(constants.dir, aspect_ratio)
-                        .maybe_clamp(child.min_size.cross(constants.dir), child.max_size.cross(constants.dir)),
+                        .maybe_clamp(child.min_size.cross(constants.dir), child.max_size.cross(constants.dir))
+                        .max(padding_border_sum),
                 )
             } else {
                 child
@@ -1656,10 +1657,12 @@ fn determine_used_cross_size(
                         child_style.size().cross(constants.dir).is_auto(),
                         constants.dir.is_column(),
                     ) {
+                        let padding_border_sum = (child.padding + child.border).cross_axis_sum(constants.dir);
                         child
                             .target_size
                             .compute_cross_aspect_ratio(constants.dir, aspect_ratio)
                             .maybe_clamp(child.min_size.cross(constants.dir), child.max_size.cross(constants.dir))
+                            .max(padding_border_sum)
                     } else {
                         child.hypothetical_inner_size.cross(constants.dir)
                     }

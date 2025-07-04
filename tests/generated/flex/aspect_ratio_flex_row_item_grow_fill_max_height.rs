@@ -8,7 +8,7 @@ fn aspect_ratio_flex_row_item_grow_fill_max_height__border_box() {
         .new_leaf(taffy::style::Style {
             flex_grow: 1f32,
             size: taffy::geometry::Size { width: taffy::style::Dimension::from_length(40f32), height: auto() },
-            max_size: taffy::geometry::Size { width: auto(), height: taffy::style::Dimension::from_length(80f32) },
+            max_size: taffy::geometry::Size { width: auto(), height: taffy::style::Dimension::from_length(40f32) },
             aspect_ratio: Some(2f32),
             ..Default::default()
         })
@@ -40,7 +40,7 @@ fn aspect_ratio_flex_row_item_grow_fill_max_height__border_box() {
     let layout = taffy.layout(node0).unwrap();
     let Layout { size, location, .. } = layout;
     assert_eq!(size.width, 100f32, "width of node {:?}. Expected {}. Actual {}", node0, 100f32, size.width);
-    assert_eq!(size.height, 50f32, "height of node {:?}. Expected {}. Actual {}", node0, 50f32, size.height);
+    assert_eq!(size.height, 40f32, "height of node {:?}. Expected {}. Actual {}", node0, 40f32, size.height);
     assert_eq!(location.x, 0f32, "x of node {:?}. Expected {}. Actual {}", node0, 0f32, location.x);
     assert_eq!(location.y, 0f32, "y of node {:?}. Expected {}. Actual {}", node0, 0f32, location.y);
 }
@@ -56,7 +56,7 @@ fn aspect_ratio_flex_row_item_grow_fill_max_height__content_box() {
             box_sizing: taffy::style::BoxSizing::ContentBox,
             flex_grow: 1f32,
             size: taffy::geometry::Size { width: taffy::style::Dimension::from_length(40f32), height: auto() },
-            max_size: taffy::geometry::Size { width: auto(), height: taffy::style::Dimension::from_length(80f32) },
+            max_size: taffy::geometry::Size { width: auto(), height: taffy::style::Dimension::from_length(40f32) },
             aspect_ratio: Some(2f32),
             ..Default::default()
         })
@@ -89,7 +89,7 @@ fn aspect_ratio_flex_row_item_grow_fill_max_height__content_box() {
     let layout = taffy.layout(node0).unwrap();
     let Layout { size, location, .. } = layout;
     assert_eq!(size.width, 100f32, "width of node {:?}. Expected {}. Actual {}", node0, 100f32, size.width);
-    assert_eq!(size.height, 50f32, "height of node {:?}. Expected {}. Actual {}", node0, 50f32, size.height);
+    assert_eq!(size.height, 40f32, "height of node {:?}. Expected {}. Actual {}", node0, 40f32, size.height);
     assert_eq!(location.x, 0f32, "x of node {:?}. Expected {}. Actual {}", node0, 0f32, location.x);
     assert_eq!(location.y, 0f32, "y of node {:?}. Expected {}. Actual {}", node0, 0f32, location.y);
 }
