@@ -1,5 +1,6 @@
 //! Computes the [flexbox](https://css-tricks.com/snippets/css/a-guide-to-flexbox/) layout algorithm on [`TaffyTree`](crate::TaffyTree) according to the [spec](https://www.w3.org/TR/css-flexbox-1/)
 use crate::compute::common::alignment::compute_alignment_offset;
+use crate::compute::common::content_size;
 use crate::geometry::{Line, Point, Rect, Size};
 use crate::prelude::{TaffyAuto, TaffyZero};
 use crate::style::{
@@ -98,6 +99,7 @@ struct FlexItem {
     /// Offset is the relative position from the item's natural flow position based on
     /// relative position values, alignment, and justification. Does not include margin/padding/border.
     offset_cross: f32,
+    aspect_ratio: Option<f32>,
 }
 
 impl FlexItem {
@@ -581,6 +583,8 @@ fn generate_anonymous_flex_items(
 
                 offset_main: 0.0,
                 offset_cross: 0.0,
+
+                aspect_ratio: child_style.aspect_ratio(),
             }
         })
         .collect()
@@ -1693,8 +1697,35 @@ fn distribute_remaining_free_space(flex_lines: &mut [FlexLine], constants: &Algo
         let total_main_axis_gap = sum_axis_gaps(constants.gap.main(constants.dir), line.items.len());
         let used_space: f32 = total_main_axis_gap
             + line.items.iter().map(|child| child.outer_target_size.main(constants.dir)).sum::<f32>();
-        let free_space = constants.inner_container_size.main(constants.dir) - used_space;
+        let mut free_space = constants.inner_container_size.main(constants.dir) - used_space;
         let mut num_auto_margins = 0;
+
+        // This handle the special case where aspect-ratio can extend the main axis after a stretch occured on the cross axis if flex-direction
+        // is column and the item doesn't have a size.
+        // Chrome and Firefox doesn't have the same behavior. Chrome extends the main size to match the aspect-ratio even if
+        // there isn't enought free space. Firefox split the remaining free space amoung the childs with aspect-ratio.
+        // Here, the Chrome's behavior is implemented.
+        if constants.dir.is_column() {
+            let mut consumed_space = 0.;
+            for child in line.items.iter_mut() {
+                if let (Some(aspect_ratio), None) = (child.aspect_ratio, child.size.main(constants.dir)) {
+                    // The aspect-ratio is computed on the content-size, so we must remove the padding and border when computing
+                    let pb_sum = (child.padding + child.border).sum_axes();
+                    let wanted_main = (child.target_size - pb_sum)
+                        .compute_main_aspect_ratio(constants.dir, aspect_ratio)
+                        .maybe_min(child.max_size.maybe_sub(pb_sum).main(constants.dir));
+                    let additional_space =
+                        (wanted_main - (child.target_size - pb_sum).main(constants.dir)).max(0.);
+
+                    consumed_space += additional_space;
+                    child.target_size.set_main(constants.dir, child.target_size.main(constants.dir) + additional_space);
+                    child
+                        .outer_target_size
+                        .set_main(constants.dir, child.outer_target_size.main(constants.dir) + additional_space);
+                }
+            }
+            free_space -= consumed_space;
+        }
 
         for child in line.items.iter_mut() {
             if child.margin_is_auto.main_start(constants.dir) {

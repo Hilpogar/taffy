@@ -559,6 +559,17 @@ impl Size<f32> {
             self.width / aspect_ratio
         }
     }
+
+    /// Compute the cross_size from aspect_ratio:
+    ///   - If diretion is column then width is computed from height and aspect_ratio
+    ///   - If direction is row then height is computed from width and aspect_ratio
+    pub fn compute_main_aspect_ratio(self, dir: FlexDirection, aspect_ratio: f32) -> f32 {
+        if dir.is_column() {
+            self.width / aspect_ratio
+        } else {
+            self.height * aspect_ratio
+        }
+    }
 }
 
 impl Size<Option<f32>> {

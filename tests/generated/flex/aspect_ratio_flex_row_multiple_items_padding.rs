@@ -6,7 +6,6 @@ fn aspect_ratio_flex_row_multiple_items_padding__border_box() {
     let mut taffy = crate::new_test_tree();
     let node0 = taffy
         .new_leaf(taffy::style::Style {
-            display: taffy::style::Display::Flex,
             box_sizing: taffy::style::BoxSizing::ContentBox,
             aspect_ratio: Some(1f32),
             padding: taffy::geometry::Rect {
@@ -20,7 +19,19 @@ fn aspect_ratio_flex_row_multiple_items_padding__border_box() {
         .unwrap();
     let node1 = taffy
         .new_leaf(taffy::style::Style {
-            display: taffy::style::Display::Flex,
+            box_sizing: taffy::style::BoxSizing::ContentBox,
+            aspect_ratio: Some(1f32),
+            padding: taffy::geometry::Rect {
+                left: length(5f32),
+                right: length(5f32),
+                top: length(5f32),
+                bottom: length(5f32),
+            },
+            ..Default::default()
+        })
+        .unwrap();
+    let node2 = taffy
+        .new_leaf(taffy::style::Style {
             box_sizing: taffy::style::BoxSizing::ContentBox,
             aspect_ratio: Some(1.7777778f32),
             padding: taffy::geometry::Rect {
@@ -40,7 +51,7 @@ fn aspect_ratio_flex_row_multiple_items_padding__border_box() {
                 size: taffy::geometry::Size { width: taffy::style::Dimension::from_length(100f32), height: auto() },
                 ..Default::default()
             },
-            &[node0, node1],
+            &[node0, node1, node2],
         )
         .unwrap();
     taffy.compute_layout_with_measure(node, taffy::geometry::Size::MAX_CONTENT, crate::test_measure_function).unwrap();
@@ -61,10 +72,16 @@ fn aspect_ratio_flex_row_multiple_items_padding__border_box() {
     assert_eq!(location.y, 0f32, "y of node {:?}. Expected {}. Actual {}", node0, 0f32, location.y);
     let layout = taffy.layout(node1).unwrap();
     let Layout { size, location, .. } = layout;
-    assert_eq!(size.width, 30f32, "width of node {:?}. Expected {}. Actual {}", node1, 30f32, size.width);
+    assert_eq!(size.width, 10f32, "width of node {:?}. Expected {}. Actual {}", node1, 10f32, size.width);
     assert_eq!(size.height, 30f32, "height of node {:?}. Expected {}. Actual {}", node1, 30f32, size.height);
     assert_eq!(location.x, 20f32, "x of node {:?}. Expected {}. Actual {}", node1, 20f32, location.x);
     assert_eq!(location.y, 0f32, "y of node {:?}. Expected {}. Actual {}", node1, 0f32, location.y);
+    let layout = taffy.layout(node2).unwrap();
+    let Layout { size, location, .. } = layout;
+    assert_eq!(size.width, 30f32, "width of node {:?}. Expected {}. Actual {}", node2, 30f32, size.width);
+    assert_eq!(size.height, 30f32, "height of node {:?}. Expected {}. Actual {}", node2, 30f32, size.height);
+    assert_eq!(location.x, 30f32, "x of node {:?}. Expected {}. Actual {}", node2, 30f32, location.x);
+    assert_eq!(location.y, 0f32, "y of node {:?}. Expected {}. Actual {}", node2, 0f32, location.y);
 }
 
 #[test]
@@ -75,7 +92,6 @@ fn aspect_ratio_flex_row_multiple_items_padding__content_box() {
     let mut taffy = crate::new_test_tree();
     let node0 = taffy
         .new_leaf(taffy::style::Style {
-            display: taffy::style::Display::Flex,
             box_sizing: taffy::style::BoxSizing::ContentBox,
             aspect_ratio: Some(1f32),
             padding: taffy::geometry::Rect {
@@ -89,7 +105,19 @@ fn aspect_ratio_flex_row_multiple_items_padding__content_box() {
         .unwrap();
     let node1 = taffy
         .new_leaf(taffy::style::Style {
-            display: taffy::style::Display::Flex,
+            box_sizing: taffy::style::BoxSizing::ContentBox,
+            aspect_ratio: Some(1f32),
+            padding: taffy::geometry::Rect {
+                left: length(5f32),
+                right: length(5f32),
+                top: length(5f32),
+                bottom: length(5f32),
+            },
+            ..Default::default()
+        })
+        .unwrap();
+    let node2 = taffy
+        .new_leaf(taffy::style::Style {
             box_sizing: taffy::style::BoxSizing::ContentBox,
             aspect_ratio: Some(1.7777778f32),
             padding: taffy::geometry::Rect {
@@ -109,7 +137,7 @@ fn aspect_ratio_flex_row_multiple_items_padding__content_box() {
                 size: taffy::geometry::Size { width: taffy::style::Dimension::from_length(100f32), height: auto() },
                 ..Default::default()
             },
-            &[node0, node1],
+            &[node0, node1, node2],
         )
         .unwrap();
     taffy.compute_layout_with_measure(node, taffy::geometry::Size::MAX_CONTENT, crate::test_measure_function).unwrap();
@@ -130,8 +158,14 @@ fn aspect_ratio_flex_row_multiple_items_padding__content_box() {
     assert_eq!(location.y, 0f32, "y of node {:?}. Expected {}. Actual {}", node0, 0f32, location.y);
     let layout = taffy.layout(node1).unwrap();
     let Layout { size, location, .. } = layout;
-    assert_eq!(size.width, 30f32, "width of node {:?}. Expected {}. Actual {}", node1, 30f32, size.width);
+    assert_eq!(size.width, 10f32, "width of node {:?}. Expected {}. Actual {}", node1, 10f32, size.width);
     assert_eq!(size.height, 30f32, "height of node {:?}. Expected {}. Actual {}", node1, 30f32, size.height);
     assert_eq!(location.x, 20f32, "x of node {:?}. Expected {}. Actual {}", node1, 20f32, location.x);
     assert_eq!(location.y, 0f32, "y of node {:?}. Expected {}. Actual {}", node1, 0f32, location.y);
+    let layout = taffy.layout(node2).unwrap();
+    let Layout { size, location, .. } = layout;
+    assert_eq!(size.width, 30f32, "width of node {:?}. Expected {}. Actual {}", node2, 30f32, size.width);
+    assert_eq!(size.height, 30f32, "height of node {:?}. Expected {}. Actual {}", node2, 30f32, size.height);
+    assert_eq!(location.x, 30f32, "x of node {:?}. Expected {}. Actual {}", node2, 30f32, location.x);
+    assert_eq!(location.y, 0f32, "y of node {:?}. Expected {}. Actual {}", node2, 0f32, location.y);
 }
