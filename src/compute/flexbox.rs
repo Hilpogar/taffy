@@ -1,8 +1,6 @@
 //! Computes the [flexbox](https://css-tricks.com/snippets/css/a-guide-to-flexbox/) layout algorithm on [`TaffyTree`](crate::TaffyTree) according to the [spec](https://www.w3.org/TR/css-flexbox-1/)
 use crate::compute::common::alignment::compute_alignment_offset;
-use crate::compute::common::content_size;
 use crate::geometry::{Line, Point, Rect, Size};
-use crate::prelude::{TaffyAuto, TaffyZero};
 use crate::style::{
     AlignContent, AlignItems, AlignSelf, AvailableSpace, FlexWrap, JustifyContent, LengthPercentageAuto, Overflow,
     Position,
@@ -15,7 +13,7 @@ use crate::util::debug::debug_log;
 use crate::util::sys::{f32_max, new_vec_with_capacity, Vec};
 use crate::util::MaybeMath;
 use crate::util::{MaybeResolve, ResolveOrZero};
-use crate::{BoxGenerationMode, BoxSizing, Dimension};
+use crate::{BoxGenerationMode, BoxSizing};
 
 use super::common::alignment::apply_alignment_fallback;
 #[cfg(feature = "content_size")]
@@ -626,6 +624,29 @@ fn determine_available_space(
     Size { width, height }
 }
 
+/// Compute the known dimension of a FlexItem.
+#[inline]
+#[must_use]
+fn compute_known_dimensions(
+    item: &FlexItem,
+    constants: &AlgoConstants,
+    cross_axis_available_space: &AvailableSpace,
+) -> Size<Option<f32>> {
+    let mut ckd = item.size.with_main(constants.dir, None);
+    if item.align_self == AlignSelf::Stretch && ckd.cross(constants.dir).is_none() {
+        ckd.set_cross(
+            constants.dir,
+            cross_axis_available_space.into_option().maybe_sub(item.margin.cross_axis_sum(constants.dir)),
+        );
+        // When the flexbox is row, the impact of stretch + aspect-ratio on the main axis is applied here.
+        // When the flexbox is in column, the impact of stretch + aspect-ratio is applied during `distribute_remaining_free_space`.
+        if constants.is_row {
+            ckd = ckd.maybe_apply_aspect_ratio(item.aspect_ratio);
+        }
+    }
+    ckd
+}
+
 /// Determine the flex base size and hypothetical main size of each item.
 ///
 /// # [9.2. Line Length Determination](https://www.w3.org/TR/css-flexbox-1/#line-sizing)
@@ -690,16 +711,7 @@ fn determine_flex_base_size(
         };
 
         // Known dimensions for child sizing
-        let child_known_dimensions = {
-            let mut ckd = child.size.with_main(dir, None);
-            if child.align_self == AlignSelf::Stretch && ckd.cross(dir).is_none() {
-                ckd.set_cross(
-                    dir,
-                    cross_axis_available_space.into_option().maybe_sub(child.margin.cross_axis_sum(dir)),
-                );
-            }
-            ckd
-        };
+        let child_known_dimensions = compute_known_dimensions(child, constants, &cross_axis_available_space);
 
         let container_width = constants.node_inner_size.main(dir);
         let box_sizing_adjustment = if child_style.box_sizing() == BoxSizing::ContentBox {
@@ -1056,18 +1068,8 @@ fn determine_container_main_size(
                                 let child_available_space = available_space.with_cross(dir, cross_axis_available_space);
 
                                 // Known dimensions for child sizing
-                                let child_known_dimensions = {
-                                    let mut ckd = item.size.with_main(dir, None);
-                                    if item.align_self == AlignSelf::Stretch && ckd.cross(dir).is_none() {
-                                        ckd.set_cross(
-                                            dir,
-                                            cross_axis_available_space
-                                                .into_option()
-                                                .maybe_sub(item.margin.cross_axis_sum(dir)),
-                                        );
-                                    }
-                                    ckd
-                                };
+                                let child_known_dimensions =
+                                    compute_known_dimensions(item, constants, &cross_axis_available_space);
 
                                 // Either the min- or max- content size depending on which constraint we are sizing under.
                                 // TODO: Optimise by using already computed values where available
