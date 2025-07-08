@@ -197,7 +197,6 @@ pub fn compute_flexbox_layout(
         style
             .size()
             .maybe_resolve(parent_size, |val, basis| tree.calc(val, basis))
-            .maybe_apply_aspect_ratio(aspect_ratio)
             .maybe_add(box_sizing_adjustment)
             .maybe_clamp(min_size, max_size)
     } else {
@@ -584,7 +583,7 @@ fn generate_anonymous_flex_items(
                 offset_main: 0.0,
                 offset_cross: 0.0,
 
-                aspect_ratio: child_style.aspect_ratio(),
+                aspect_ratio,
             }
         })
         .collect()
@@ -715,6 +714,7 @@ fn determine_flex_base_size(
             .flex_basis()
             .maybe_resolve(container_width, |val, basis| tree.calc(val, basis))
             .maybe_add(box_sizing_adjustment);
+        let main_is_auto = child_style.size().main(constants.dir).is_auto();
 
         drop(child_style);
 
@@ -826,8 +826,12 @@ fn determine_flex_base_size(
 
             // 4.5. Automatic Minimum Size of Flex Items
             // https://www.w3.org/TR/css-flexbox-1/#min-size-auto
-            let clamped_min_content_size =
-                min_content_main_size.maybe_min(child.size.main(dir)).maybe_min(child.max_size.main(dir));
+            // The size of the child limits the min_content_main_size only if it's not auto
+            let clamped_min_content_size = if main_is_auto {
+                min_content_main_size.maybe_min(child.max_size.main(dir))
+            } else {
+                min_content_main_size.maybe_min(child.size.main(dir)).maybe_min(child.max_size.main(dir))
+            };
             clamped_min_content_size.maybe_max(padding_border_axes_sums.main(dir))
         });
 
@@ -1714,8 +1718,7 @@ fn distribute_remaining_free_space(flex_lines: &mut [FlexLine], constants: &Algo
                     let wanted_main = (child.target_size - pb_sum)
                         .compute_main_aspect_ratio(constants.dir, aspect_ratio)
                         .maybe_min(child.max_size.maybe_sub(pb_sum).main(constants.dir));
-                    let additional_space =
-                        (wanted_main - (child.target_size - pb_sum).main(constants.dir)).max(0.);
+                    let additional_space = (wanted_main - (child.target_size - pb_sum).main(constants.dir)).max(0.);
 
                     consumed_space += additional_space;
                     child.target_size.set_main(constants.dir, child.target_size.main(constants.dir) + additional_space);
