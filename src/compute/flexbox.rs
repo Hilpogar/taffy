@@ -634,15 +634,18 @@ fn compute_known_dimensions(
 ) -> Size<Option<f32>> {
     let mut ckd = item.size.with_main(constants.dir, None);
     if item.align_self == AlignSelf::Stretch && ckd.cross(constants.dir).is_none() {
-        ckd.set_cross(
-            constants.dir,
-            cross_axis_available_space.into_option().maybe_sub(item.margin.cross_axis_sum(constants.dir)),
-        );
-        // When the flexbox is row, the impact of stretch + aspect-ratio on the main axis is applied here.
-        // When the flexbox is in column, the impact of stretch + aspect-ratio is applied during `distribute_remaining_free_space`.
-        if constants.is_row {
-            ckd = ckd.maybe_apply_aspect_ratio(item.aspect_ratio);
+        // Auto margin absorbes all the space on cross axis so stretch has no effect
+        if constants.is_column && (item.margin_is_auto.left || item.margin_is_auto.right)
+            || constants.is_row && (item.margin_is_auto.top || item.margin_is_auto.bottom)
+        {
+            ckd.set_cross(constants.dir, item.size.cross(constants.dir));
+        } else {
+            ckd.set_cross(
+                constants.dir,
+                cross_axis_available_space.into_option().maybe_sub(item.margin.cross_axis_sum(constants.dir)),
+            );
         }
+        ckd = ckd.maybe_apply_aspect_ratio(item.aspect_ratio);
     }
     ckd
 }
