@@ -1410,7 +1410,7 @@ fn determine_hypothetical_cross_size(
         let child_cross = {
             let child_style = tree.get_flexbox_child_style(child.node);
             if let (Some(aspect_ratio), true, true) =
-                (child_style.aspect_ratio(), child_style.size().cross(constants.dir).is_auto(), constants.dir.is_row())
+                (child.aspect_ratio, child_style.size().cross(constants.dir).is_auto(), constants.is_row)
             {
                 Some(
                     child
@@ -1654,10 +1654,21 @@ fn determine_used_cross_size(
                     && !child.margin_is_auto.cross_end(constants.dir)
                     && child_style.size().cross(constants.dir).is_auto()
                 {
+                    let stretched_cross = line_cross_size - child.margin.cross_axis_sum(constants.dir);
+                    if let Some(aspect_ratio) = child.aspect_ratio {
+                        // The aspect-ratio is applied to the content so we must remove the padding and border
+                        let pb_sum = (child.padding + child.border).sum_axes();
+                        stretched_cross.max(
+                            (child.target_size - pb_sum).compute_cross_aspect_ratio(constants.dir, aspect_ratio)
+                                + pb_sum.cross(constants.dir),
+                        )
+                    } else {
+                        stretched_cross
+                    }
                     // For some reason this particular usage of max_width is an exception to the rule that max_width's transfer
                     // using the aspect_ratio (if set). Both Chrome and Firefox agree on this. And reading the spec, it seems like
-                    // a reasonable interpretation. Although it seems to me that the spec *should* apply aspect_ratio here.
-                    (line_cross_size - child.margin.cross_axis_sum(constants.dir)).maybe_clamp(
+                    // a reasonable interpretation.
+                    .maybe_clamp(
                         child.min_size.cross(constants.dir),
                         child.max_size_ignoring_aspect_ratio.cross(constants.dir),
                     )
