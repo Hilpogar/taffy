@@ -193,6 +193,7 @@ mod aspect_ratio_flex_row_stretch_fill_max_width;
 mod aspect_ratio_flex_row_stretch_fill_width;
 mod aspect_ratio_flex_row_stretch_main_auto_margin;
 mod aspect_ratio_flex_row_wrap_grow_and_stretch;
+mod aspect_ratio_no_size_with_content;
 mod aspect_ratio_with_larger_content;
 mod bevy_issue_10343_block;
 mod bevy_issue_10343_flex;

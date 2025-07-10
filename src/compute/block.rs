@@ -232,7 +232,15 @@ fn compute_inner(tree: &mut impl LayoutBlockContainer, node_id: NodeId, inputs: 
         );
     let container_outer_height = known_dimensions
         .height
-        .unwrap_or(intrinsic_outer_height.maybe_clamp(min_size.height, max_size.height))
+        .unwrap_or({
+            if let Some(aspect_ratio) = aspect_ratio {
+                intrinsic_outer_height
+                    .max(container_outer_width / aspect_ratio)
+                    .maybe_clamp(min_size.height, max_size.height)
+            } else {
+                intrinsic_outer_height.maybe_clamp(min_size.height, max_size.height)
+            }
+        })
         .maybe_max(Some(padding_border_size.height));
     let final_outer_size = Size { width: container_outer_width, height: container_outer_height };
 
