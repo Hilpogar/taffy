@@ -151,6 +151,8 @@ struct AlgoConstants {
     align_content: AlignContent,
     /// The justify_content property of this node
     justify_content: Option<JustifyContent>,
+    /// The aspect-ratio of the flex container
+    aspect_ratio: Option<f32>,
 
     /// The border-box size of the node being laid out (if known)
     node_outer_size: Size<Option<f32>>,
@@ -429,7 +431,6 @@ fn compute_constants(
     let is_wrap = matches!(style.flex_wrap(), FlexWrap::Wrap | FlexWrap::WrapReverse);
     let is_wrap_reverse = style.flex_wrap() == FlexWrap::WrapReverse;
 
-    let aspect_ratio = style.aspect_ratio();
     let margin = style.margin().resolve_or_zero(parent_size.width, |val, basis| tree.calc(val, basis));
     let padding = style.padding().resolve_or_zero(parent_size.width, |val, basis| tree.calc(val, basis));
     let border = style.border().resolve_or_zero(parent_size.width, |val, basis| tree.calc(val, basis));
@@ -440,6 +441,7 @@ fn compute_constants(
     let align_items = style.align_items().unwrap_or(AlignItems::Stretch);
     let align_content = style.align_content().unwrap_or(AlignContent::Stretch);
     let justify_content = style.justify_content();
+    let aspect_ratio = style.aspect_ratio();
 
     // Scrollbar gutters are reserved when the `overflow` property is set to `Overflow::Scroll`.
     // However, the axis are switched (transposed) because a node that scrolls vertically needs
@@ -484,6 +486,7 @@ fn compute_constants(
         align_items,
         align_content,
         justify_content,
+        aspect_ratio,
         node_outer_size,
         node_inner_size,
         container_size,
@@ -1582,6 +1585,15 @@ fn calculate_cross_size(flex_lines: &mut [FlexLine], node_size: Size<Option<f32>
         // If the flex container is single-line, then clamp the line’s cross-size to be within the container’s computed min and max cross sizes.
         // Note that if CSS 2.1’s definition of min/max-width/height applied more generally, this behavior would fall out automatically.
         if !constants.is_wrap {
+            // I'm not sure if this is correctly implemented but it allows flex lines
+            // to scale with the aspect-ratio of the flex container.
+            // This behavior can be observed with this test :
+            // - aspect_ratio_flex_row_no_size_with_content.html
+            if let Some(aspect_ratio) = constants.aspect_ratio {
+                flex_lines[0].cross_size = flex_lines[0]
+                    .cross_size
+                    .max(constants.container_size.compute_cross_aspect_ratio(constants.dir, aspect_ratio));
+            }
             let cross_axis_padding_border = constants.content_box_inset.cross_axis_sum(constants.dir);
             let cross_min_size = constants.min_size.cross(constants.dir);
             let cross_max_size = constants.max_size.cross(constants.dir);
