@@ -1,4 +1,5 @@
 //! Computes the [flexbox](https://css-tricks.com/snippets/css/a-guide-to-flexbox/) layout algorithm on [`TaffyTree`](crate::TaffyTree) according to the [spec](https://www.w3.org/TR/css-flexbox-1/)
+
 use crate::compute::common::alignment::compute_alignment_offset;
 use crate::geometry::{Line, Point, Rect, Size};
 use crate::style::{
@@ -29,6 +30,8 @@ struct FlexItem {
 
     /// The base size of this item
     size: Size<Option<f32>>,
+    /// Whether each axis is auto or not
+    size_is_auto: Size<bool>,
     /// The minimum allowable size of this item
     min_size: Size<Option<f32>>,
     /// The maximum allowable size of this item
@@ -341,7 +344,7 @@ fn compute_preliminary(tree: &mut impl LayoutFlexboxContainer, node: NodeId, inp
 
     // 11. Determine the used cross size of each flex item.
     debug_log!("determine_used_cross_size");
-    determine_used_cross_size(tree, &mut flex_lines, &constants);
+    determine_used_cross_size(&mut flex_lines, &constants);
 
     // 9.5. Main-Axis Alignment
 
@@ -533,6 +536,10 @@ fn generate_anonymous_flex_items(
                     .maybe_resolve(constants.node_inner_size, |val, basis| tree.calc(val, basis))
                     .maybe_apply_aspect_ratio(aspect_ratio)
                     .maybe_add(box_sizing_adjustment),
+                size_is_auto: Size {
+                    width: child_style.size().width.is_auto(),
+                    height: child_style.size().height.is_auto(),
+                },
                 min_size: child_style
                     .min_size()
                     .maybe_resolve(constants.node_inner_size, |val, basis| tree.calc(val, basis))
@@ -732,7 +739,6 @@ fn determine_flex_base_size(
             .flex_basis()
             .maybe_resolve(container_width, |val, basis| tree.calc(val, basis))
             .maybe_add(box_sizing_adjustment);
-        let main_is_auto = child_style.size().main(constants.dir).is_auto();
 
         drop(child_style);
 
@@ -845,7 +851,7 @@ fn determine_flex_base_size(
             // 4.5. Automatic Minimum Size of Flex Items
             // https://www.w3.org/TR/css-flexbox-1/#min-size-auto
             // The size of the child limits the min_content_main_size only if it's not auto
-            let clamped_min_content_size = if main_is_auto {
+            let clamped_min_content_size = if child.size_is_auto.main(constants.dir) {
                 min_content_main_size.maybe_min(child.max_size.main(dir))
             } else {
                 min_content_main_size.maybe_min(child.size.main(dir)).maybe_min(child.max_size.main(dir))
@@ -1330,9 +1336,21 @@ fn resolve_flexible_lengths(line: &mut FlexLine, constants: &AlgoConstants) {
                 if sum_scaled_shrink_factor > 0.0 {
                     for child in &mut unfrozen {
                         let scaled_shrink_factor = child.inner_flex_basis * child.flex_shrink;
+                        // Shrink is clamped by the aspect-ratio if the cross axis is defined
+                        let aspect_ratio_main = if !child.size_is_auto.cross(constants.dir) {
+                            child
+                                .size
+                                .with_main(constants.dir, None)
+                                .maybe_apply_aspect_ratio(child.aspect_ratio)
+                                .maybe_clamp(child.min_size, child.max_size)
+                                .main(constants.dir)
+                        } else {
+                            None
+                        };
                         child.target_size.set_main(
                             constants.dir,
-                            child.flex_basis + free_space * (scaled_shrink_factor / sum_scaled_shrink_factor),
+                            (child.flex_basis + free_space * (scaled_shrink_factor / sum_scaled_shrink_factor))
+                                .maybe_max(aspect_ratio_main),
                         )
                     }
                 }
@@ -1411,9 +1429,8 @@ fn determine_hypothetical_cross_size(
         // - aspect_ratio_flex_row_item_shrink_fill_min_height.html
         // - aspect_ratio_flex_row_item_shrink_fill_min_width.html
         let child_cross = {
-            let child_style = tree.get_flexbox_child_style(child.node);
             if let (Some(aspect_ratio), true, true) =
-                (child.aspect_ratio, child_style.size().cross(constants.dir).is_auto(), constants.is_row)
+                (child.aspect_ratio, child.size_is_auto.cross(constants.dir), constants.is_row)
             {
                 Some(
                     child
@@ -1649,22 +1666,17 @@ fn handle_align_content_stretch(flex_lines: &mut [FlexLine], node_size: Size<Opt
 ///
 ///   **Note that this step does not affect the main size of the flex item, even if it has an intrinsic aspect ratio**.
 #[inline]
-fn determine_used_cross_size(
-    tree: &impl LayoutFlexboxContainer,
-    flex_lines: &mut [FlexLine],
-    constants: &AlgoConstants,
-) {
+fn determine_used_cross_size(flex_lines: &mut [FlexLine], constants: &AlgoConstants) {
     for line in flex_lines {
         let line_cross_size = line.cross_size;
 
         for child in line.items.iter_mut() {
-            let child_style = tree.get_flexbox_child_style(child.node);
             child.target_size.set_cross(
                 constants.dir,
                 if child.align_self == AlignSelf::Stretch
                     && !child.margin_is_auto.cross_start(constants.dir)
                     && !child.margin_is_auto.cross_end(constants.dir)
-                    && child_style.size().cross(constants.dir).is_auto()
+                    && child.size_is_auto.cross(constants.dir)
                 {
                     let stretched_cross = line_cross_size - child.margin.cross_axis_sum(constants.dir);
                     if let Some(aspect_ratio) = child.aspect_ratio {
@@ -1687,12 +1699,9 @@ fn determine_used_cross_size(
                 } else {
                     // Because the hypothetical_cross_size isn't modified by the change of the main size due to flex_grow or flex_shrink
                     // when the flex direction is column, we must adapt the used_cross_size now.
-                    let child_style = tree.get_flexbox_child_style(child.node);
-                    if let (Some(aspect_ratio), true, true) = (
-                        child_style.aspect_ratio(),
-                        child_style.size().cross(constants.dir).is_auto(),
-                        constants.dir.is_column(),
-                    ) {
+                    if let (Some(aspect_ratio), true, true) =
+                        (child.aspect_ratio, child.size_is_auto.cross(constants.dir), constants.dir.is_column())
+                    {
                         let padding_border_sum = (child.padding + child.border).cross_axis_sum(constants.dir);
                         child
                             .target_size

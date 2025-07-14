@@ -175,6 +175,7 @@ mod aspect_ratio_flex_row_fill_min_height;
 mod aspect_ratio_flex_row_fill_min_width;
 mod aspect_ratio_flex_row_fill_width;
 mod aspect_ratio_flex_row_fill_width_flex;
+mod aspect_ratio_flex_row_fixed_width_with_larger_item;
 mod aspect_ratio_flex_row_item_grow_fill_height;
 mod aspect_ratio_flex_row_item_grow_fill_height_bigger_than_parent;
 mod aspect_ratio_flex_row_item_grow_fill_max_height;
